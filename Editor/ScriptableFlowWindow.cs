@@ -42,7 +42,7 @@ namespace ScriptableFlow.Editor
         private Exception           _inlineInstanceException;
         private Vector2             _scrollPosition;
 
-        [MenuItem("Assets/Create/Scriptable Object", priority = 10)]
+        [MenuItem("Assets/Create/Scriptable Object", priority = -1)]
         public static void OpenWindow()
         {
             ScriptableFlowWindow window = GetWindow<ScriptableFlowWindow>();
@@ -68,13 +68,7 @@ namespace ScriptableFlow.Editor
                 {
                     var nearestType = ReflectionStatics.GetNearestTypeOrInterfaceWithAttribute<CreateAssetAttribute>(validType);
                     var createAttribute = nearestType?.GetCustomAttribute<CreateAssetAttribute>();
-                    var nearestTypeInherits = false;
-                    var category = "None";
-                    if (createAttribute != null)
-                    {
-                        nearestTypeInherits = createAttribute.inherit;
-                        category = createAttribute.category;
-                    }
+                    var category = createAttribute != null ? createAttribute.category : "None";
                     categoriesSet.Add(category);
                     return new Entry
                     {
@@ -284,13 +278,14 @@ namespace ScriptableFlow.Editor
             if (!type.IsSubclassOf(typeof(ScriptableObject)))
                 return false;
 
-            if (Attribute.IsDefined(type, typeof(ExcludeFromPresetAttribute)))
-                return false;
-
             if (!type.HasTypeOrInterfaceWithAttribute<CreateAssetAttribute>() &&
-                !type.HasTypeOrInterfaceWithAttribute<CreateAssetMenuAttribute>())
+                !Attribute.IsDefined(type, typeof(CreateAssetMenuAttribute), inherit: false))
                 return false;
 
+            var nearestType = type.GetNearestTypeOrInterfaceWithAttribute<CreateAssetAttribute>();
+            if (nearestType != null && nearestType != type && !type.GetCustomAttribute<CreateAssetAttribute>().inherit)
+                return false;
+            
             if (type.IsAbstract || type.IsGenericType || type.IsNotPublic)
                 return false;
 
