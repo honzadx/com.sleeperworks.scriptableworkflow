@@ -20,17 +20,18 @@ namespace ScriptableFlow.Editor
             public Type type;
             public string name;
             public string fullName;
-            public bool hasCreateAssetAttribute;
+            public string category;
         }
 
         private Entry[] _entries;
+        private string[] _categories;
                             
         private string      _filter;
-        private bool        _attributeCheck;
         private bool        _ignoreCase;
         private Entry[]     _filteredEntries;
         private string[]    _filteredEntryNames;
         private int         _selectedIndex;
+        private int         _selectedCategory;
         private string      _fileName;
         private string      _newAssetPath;
                                     
@@ -52,6 +53,8 @@ namespace ScriptableFlow.Editor
         private void OnEnable()
         {
             EditorApplication.update += Repaint;
+            var categoriesSet = new HashSet<string>();
+            categoriesSet.Add("All");
             List<Entry> validEntries = new();
             
             var assemblies = AppDomain.CurrentDomain.GetAssemblies();
@@ -64,22 +67,43 @@ namespace ScriptableFlow.Editor
                 var newEntries = types.Select(validType =>
                 {
                     var nearestType = ReflectionStatics.GetNearestTypeOrInterfaceWithAttribute<CreateAssetAttribute>(validType);
-                    var nearestTypeInherits = nearestType?.GetCustomAttribute<CreateAssetAttribute>()?.inherit ?? false;
+                    var createAttribute = nearestType?.GetCustomAttribute<CreateAssetAttribute>();
+                    var nearestTypeInherits = false;
+                    var category = "None";
+                    if (createAttribute != null)
+                    {
+                        nearestTypeInherits = createAttribute.inherit;
+                        category = createAttribute.category;
+                    }
+                    categoriesSet.Add(category);
                     return new Entry
                     {
                         type = validType,
                         name = validType.Name,
                         fullName = validType.FullName,
-                        hasCreateAssetAttribute = nearestType == validType || nearestTypeInherits
+                        category = category,
                     };
                 });
                 validEntries.AddRange(newEntries);
             }
-
-            _fileName = string.Empty;
+            
+            _categories = categoriesSet.ToArray();
+            Array.Sort(_categories, (a, b) =>
+            {
+                if (a == "All")
+                    return -1;
+                if (b == "All")
+                    return 1;
+                if (a == "None")
+                    return -1;
+                if (b == "None")
+                    return 1;
+                return String.CompareOrdinal(a, b);
+            });
             _entries = validEntries.ToArray();
             _filteredEntries = validEntries.ToArray();
             _filteredEntryNames = _filteredEntries.Select(filteredEntry => filteredEntry.fullName).ToArray();
+            _fileName = _filteredEntries.Length > 0 ? _filteredEntries[_selectedIndex].name : string.Empty;
         }
 
         private void OnDisable()
@@ -97,15 +121,15 @@ namespace ScriptableFlow.Editor
             _selectedIndex = selectedIndex;
 
             var filter = EditorGUILayout.TextField("Type Filter", _filter);
-            var attributeCheck = EditorGUILayout.Toggle("Attribute Check", _attributeCheck);
             var ignoreCase = EditorGUILayout.Toggle("Ignore Case", _ignoreCase);
+            var selectedCategory = EditorGUILayout.Popup("Category", _selectedCategory, _categories);
 
-            bool attributeCheckUpdated = _attributeCheck != attributeCheck;
             bool ignoreCaseUpdated = _ignoreCase != ignoreCase;
-            bool filterUpdated = filter != _filter || _filteredEntries == null || ignoreCaseUpdated || attributeCheckUpdated;
+            bool categoryUpdated = _selectedCategory != selectedCategory;
+            bool filterUpdated = filter != _filter || _filteredEntries == null || ignoreCaseUpdated || categoryUpdated;
 
-            _attributeCheck = attributeCheck;
             _ignoreCase = ignoreCase;
+            _selectedCategory = selectedCategory;
 
             if (filterUpdated)
             {
@@ -113,9 +137,10 @@ namespace ScriptableFlow.Editor
                 _filter = filter;
                 _filteredEntries = _entries.Where(entry =>
                 {
-                    if (_attributeCheck && !entry.hasCreateAssetAttribute)
-                        return false;
-                    return string.IsNullOrEmpty(filter) || entry.fullName.Contains(_filter, stringComparison);
+                    if (_selectedCategory == 0) // All
+                        return string.IsNullOrEmpty(filter) || entry.fullName.Contains(_filter, stringComparison);
+                    
+                    return (string.IsNullOrEmpty(filter) || entry.fullName.Contains(_filter, stringComparison)) && entry.category == _categories[_selectedCategory];
                 }).ToArray();
                 hasEntries = _filteredEntries.Length > 0;
                 _filteredEntryNames = _filteredEntries.Select(filteredEntry => filteredEntry.fullName).ToArray();
@@ -133,12 +158,12 @@ namespace ScriptableFlow.Editor
                 _newInstanceEditor = _newInstance ? UnityEditor.Editor.CreateEditor(_newInstance) : null;
                 _inlineInstanceException = null;
             }
-
+            
             using (new EditorGUI.DisabledScope(!hasEntries))
             {
                 EditorGUILayout.LabelField("Type", hasEntries ? _filteredEntries[_selectedIndex].name : "");
 
-                if (indexChanged || filterUpdated)
+                if (filterUpdated || indexChanged)
                     _fileName = hasEntries ? _filteredEntries[_selectedIndex].name : string.Empty;
 
                 _fileName = EditorGUILayout.TextField("File Name", _fileName);
