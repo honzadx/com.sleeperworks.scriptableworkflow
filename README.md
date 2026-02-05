@@ -4,7 +4,7 @@ Scriptable Flow is a Unity package that makes creating ScriptableObjects faster 
 
 ### Features
 1. <b>Single creation menu</b> - All ScriptableObjects available in `Create/Scriptable Object`
-2. <b>Type filtering</b> - Filter ScriptableObjects by type quickly
+2. <b>Filtering</b> - Filter ScriptableObjects by type and customizable category
 3. <b>Templates</b> - Use a reference and modify it for faster iteration
 4. <b>Previews before creation</b> - View and edit data before it's serialized into an asset
 
